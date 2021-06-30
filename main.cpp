@@ -189,7 +189,7 @@ int main(int argc, char *argv[])
     }
 
     struct dma_buf_sync param = {0};
-    param.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_WRITE;
+    param.flags = DMA_BUF_SYNC_START | DMA_BUF_SYNC_RW;
 
     io = ioctl(surface->share_fd, DMA_BUF_IOCTL_SYNC, &param);
     if (io < 0)
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
     }
 
 
-    param.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_WRITE;
+    param.flags = DMA_BUF_SYNC_END | DMA_BUF_SYNC_RW;
     
     io = ioctl(surface->share_fd, DMA_BUF_IOCTL_SYNC, &param);
     if (io < 0)
@@ -277,8 +277,8 @@ int main(int argc, char *argv[])
     {
         gettimeofday(&startTime, NULL);
 
-        config_para_ex_ion_s blit_config = { 0 };
 
+        config_para_ex_ion_s blit_config = { 0 };
 
         blit_config.alu_const_color = 0xffffffff;
 
@@ -365,8 +365,6 @@ int main(int argc, char *argv[])
         double seconds = (endTime.tv_sec - startTime.tv_sec);
 	    double milliseconds = ((double)(endTime.tv_usec - startTime.tv_usec)) / 1000000.0;
 
-        //printf("FRAME: elapsed=%f\n", seconds + milliseconds);
-
         elapsed += seconds + milliseconds;
 
         if (elapsed >= 1.0)
@@ -381,5 +379,13 @@ int main(int argc, char *argv[])
         }
     }
 
+
+    ion_surface_free(surface);
+    display_free(display);
+
+    close(ge2d_fd);
+    close(ion_fd);
+    close(fb0_fd);
+    
     return EXIT_SUCCESS;
 }
