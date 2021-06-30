@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <linux/fb.h>
 #include <linux/dma-buf.h>
+#include <sys/time.h>
 
 #include "ion.h"
 #include "ge2d.h"
@@ -238,6 +239,14 @@ int main(int argc, char *argv[])
     fd = -1;
 
 
+
+    double elapsed = 0;
+    int totalFrames = 0;
+    bool isRunning = true;
+    struct timeval startTime;
+    struct timeval endTime;
+
+
     // blit the image
     ge2d_fd = open("/dev/ge2d", O_RDWR);
     if (ge2d_fd < 0)
@@ -247,85 +256,113 @@ int main(int argc, char *argv[])
     }
 
 
-    config_para_ex_ion_s blit_config = { 0 };
-
-
-    blit_config.alu_const_color = 0xffffffff;
-
-    blit_config.dst_para.mem_type = CANVAS_OSD0;
-    blit_config.dst_para.format = GE2D_FORMAT_S32_ARGB;
-
-    blit_config.dst_para.left = 0;
-    blit_config.dst_para.top = 0;
-    blit_config.dst_para.width = display->width;
-    blit_config.dst_para.height = display->height;
-    blit_config.dst_para.x_rev = 0;
-    blit_config.dst_para.y_rev = 0;
-
-    switch (rotation)
+    while (1)
     {
-        case Rotation_0:
+        gettimeofday(&startTime, NULL);
+
+
+        config_para_ex_ion_s blit_config = { 0 };
+
+
+        blit_config.alu_const_color = 0xffffffff;
+
+        blit_config.dst_para.mem_type = CANVAS_OSD0;
+        blit_config.dst_para.format = GE2D_FORMAT_S32_ARGB;
+
+        blit_config.dst_para.left = 0;
+        blit_config.dst_para.top = 0;
+        blit_config.dst_para.width = display->width;
+        blit_config.dst_para.height = display->height;
+        blit_config.dst_para.x_rev = 0;
+        blit_config.dst_para.y_rev = 0;
+
+        switch (rotation)
+        {
+            case Rotation_0:
+                break;
+
+            case Rotation_90:
+                blit_config.dst_xy_swap = 1;
+                blit_config.dst_para.x_rev = 1;
+                break;
+
+            case Rotation_180:
+                blit_config.dst_para.x_rev = 1;
+                blit_config.dst_para.y_rev = 1;
+                break;
+
+            case Rotation_270:
+                blit_config.dst_xy_swap = 1;
+                blit_config.dst_para.y_rev = 1;
+                break;
+                
+            default:
+                break;
+        }
+
+
+        blit_config.src_para.mem_type = CANVAS_ALLOC;
+        blit_config.src_para.format = GE2D_FORMAT_S32_ARGB;
+
+        blit_config.src_para.left = 0;
+        blit_config.src_para.top = 0;
+        blit_config.src_para.width = surface->width;
+        blit_config.src_para.height = surface->height;
+
+        blit_config.src_planes[0].shared_fd = surface->share_fd;
+        blit_config.src_planes[0].w = surface->stride / (surface->bits_per_pixel / 8);
+        blit_config.src_planes[0].h = surface->height;
+
+
+        io = ioctl(ge2d_fd, GE2D_CONFIG_EX_ION, &blit_config);
+        if (io < 0)
+        {
+            printf("GE2D_CONFIG failed\n");
+            abort();
+        }
+
+
+        ge2d_para_s blitRect = { 0 };
+
+        blitRect.src1_rect.x = 0;
+        blitRect.src1_rect.y = 0;
+        blitRect.src1_rect.w = surface->width;
+        blitRect.src1_rect.h = surface->height;
+
+        blitRect.dst_rect.x = 0;
+        blitRect.dst_rect.y = 0;
+        blitRect.dst_rect.w = display->width;
+        blitRect.dst_rect.h = display->height;
+
+        //io = ioctl(ge2d_fd, GE2D_STRETCHBLIT_NOALPHA, &blitRect);
+        io = ioctl(ge2d_fd, GE2D_STRETCHBLIT, &blitRect);
+        if (io < 0)
+        {
+            printf("GE2D_BLIT_NOALPHA failed.\n");
+            abort();
+        }
+
+
+        gettimeofday(&endTime, NULL);
+        ++totalFrames;
+
+        double seconds = (endTime.tv_sec - startTime.tv_sec);
+	    double milliseconds = ((double)(endTime.tv_usec - startTime.tv_usec)) / 1000000.0;
+
+        //printf("FRAME: elapsed=%f\n", seconds + milliseconds);
+
+        elapsed += seconds + milliseconds;
+
+        if (elapsed >= 1.0)
+        {
+            int fps = (int)(totalFrames / elapsed);
+            printf("Frames=%d in %f seconds (FPS: %d)\n", totalFrames, elapsed, fps);
+
+            totalFrames = 0;
+            elapsed = 0;
+
             break;
-
-        case Rotation_90:
-            blit_config.dst_xy_swap = 1;
-            blit_config.dst_para.x_rev = 1;
-            break;
-
-        case Rotation_180:
-            blit_config.dst_para.x_rev = 1;
-            blit_config.dst_para.y_rev = 1;
-            break;
-
-        case Rotation_270:
-            blit_config.dst_xy_swap = 1;
-            blit_config.dst_para.y_rev = 1;
-            break;
-            
-        default:
-            break;
-    }
-
-
-    blit_config.src_para.mem_type = CANVAS_ALLOC;
-    blit_config.src_para.format = GE2D_FORMAT_S32_ARGB;
-
-    blit_config.src_para.left = 0;
-    blit_config.src_para.top = 0;
-    blit_config.src_para.width = surface->width;
-    blit_config.src_para.height = surface->height;
-
-    blit_config.src_planes[0].shared_fd = surface->share_fd;
-    blit_config.src_planes[0].w = surface->stride / (surface->bits_per_pixel / 8);
-    blit_config.src_planes[0].h = surface->height;
-
-
-    io = ioctl(ge2d_fd, GE2D_CONFIG_EX_ION, &blit_config);
-    if (io < 0)
-    {
-        printf("GE2D_CONFIG failed\n");
-        abort();
-    }
-
-
-    ge2d_para_s blitRect = { 0 };
-
-    blitRect.src1_rect.x = 0;
-    blitRect.src1_rect.y = 0;
-    blitRect.src1_rect.w = surface->width;
-    blitRect.src1_rect.h = surface->height;
-
-    blitRect.dst_rect.x = 0;
-    blitRect.dst_rect.y = 0;
-    blitRect.dst_rect.w = display->width;
-    blitRect.dst_rect.h = display->height;
-
-    //io = ioctl(ge2d_fd, GE2D_STRETCHBLIT_NOALPHA, &blitRect);
-    io = ioctl(ge2d_fd, GE2D_STRETCHBLIT, &blitRect);
-    if (io < 0)
-    {
-        printf("GE2D_BLIT_NOALPHA failed.\n");
-        abort();
+        }
     }
 
     return EXIT_SUCCESS;
