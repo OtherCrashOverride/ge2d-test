@@ -255,11 +255,27 @@ int main(int argc, char *argv[])
         abort();
     }
 
+    int32_t filter;
+    filter = FILTER_TYPE_BICUBIC; // vfilter
+    filter |= (FILTER_TYPE_BICUBIC << 16) ; // hfilter
+
+    io = ioctl(ge2d_fd, GE2D_SET_COEF, filter);
+    if (io < 0)
+    {
+        printf("GE2D_SET_COEF failed\n");
+        abort();
+    }
+
+    io = ioctl(ge2d_fd, GE2D_ANTIFLICKER_ENABLE, 0);
+    if (io < 0)
+    {
+        printf("GE2D_ANTIFLICKER_ENABLE failed\n");
+        abort();
+    }
 
     while (1)
     {
         gettimeofday(&startTime, NULL);
-
 
         config_para_ex_ion_s blit_config = { 0 };
 
@@ -334,8 +350,8 @@ int main(int argc, char *argv[])
         blitRect.dst_rect.w = display->width;
         blitRect.dst_rect.h = display->height;
 
-        //io = ioctl(ge2d_fd, GE2D_STRETCHBLIT_NOALPHA, &blitRect);
-        io = ioctl(ge2d_fd, GE2D_STRETCHBLIT, &blitRect);
+        io = ioctl(ge2d_fd, GE2D_STRETCHBLIT_NOALPHA, &blitRect);
+        //io = ioctl(ge2d_fd, GE2D_STRETCHBLIT, &blitRect);
         if (io < 0)
         {
             printf("GE2D_BLIT_NOALPHA failed.\n");
